@@ -1,7 +1,7 @@
 import json
 from textual.widgets import RichLog
 from textual.css.query import NoMatches
-from .crypto import decrypt_msg
+from crypto import decrypt_msg, decrypt_rsa
 
 async def process_server_message(app, data: dict):
     msg_type = data.get("type")
@@ -20,7 +20,8 @@ async def process_server_message(app, data: dict):
         if app.username_submitted and app.my_username and app.ws:
             await app.ws.send(json.dumps({
                 "type": "set_username",
-                "username": app.my_username
+                "username": app.my_username,
+                "public_key": app.public_key_pem
             }))
 
     elif msg_type == "system":
@@ -60,6 +61,12 @@ async def process_server_message(app, data: dict):
     elif msg_type == "online":
         app.online_count = data.get("count", 0)
         app.online_users = data.get("users", [])
+        
+        # Merge new public keys
+        new_keys = data.get("public_keys", {})
+        for uname, pub_pem in new_keys.items():
+            app.public_keys[uname] = pub_pem
+            
         app.update_header()
         app.update_sidebar()
 
@@ -77,6 +84,13 @@ async def process_server_message(app, data: dict):
         sender = data.get("from", "?")
         text = data.get("text", "")
         time_str = data.get("time", "")
+        
+        # Try to decrypt if it looks like base64 RSA payload
+        if not text.startswith("🔒") and app.private_key:
+            decrypted = decrypt_rsa(app.private_key, text)
+            if not decrypted.startswith("🔒"):
+                text = decrypted
+        
         app.last_whisper_from = sender
         app.append_whisper_in(sender, text, time_str)
 

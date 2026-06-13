@@ -15,6 +15,7 @@ import re
 from config import COLORS, CSS, MAX_MSG_BUFFER, MAX_HISTORY
 from message_handler import process_server_message
 from commands import process_user_command, process_chat_message
+from crypto import generate_rsa_keys, export_public_key
 
 class ChatApp(App):
     CSS = CSS
@@ -49,9 +50,18 @@ class ChatApp(App):
     _msg_counter: int = 0
     _burn_tasks: dict = {}  # {msg_id: asyncio.Task}
 
+    # RSA Keys
+    private_key = None
+    public_key_pem: str = ""
+    public_keys: dict = {}
+
     def __init__(self, url: str):
         super().__init__()
         self.websocket_url = url
+        # Generate keys on startup
+        priv, pub = generate_rsa_keys()
+        self.private_key = priv
+        self.public_key_pem = export_public_key(pub)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="username-screen"):
@@ -416,7 +426,8 @@ class ChatApp(App):
                 self.username_submitted = True
                 await self.ws.send(json.dumps({
                     "type": "set_username",
-                    "username": text
+                    "username": text,
+                    "public_key": self.public_key_pem
                 }))
             elif not self.ws:
                 self.notify("Menunggu koneksi ke server...", severity="warning")

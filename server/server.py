@@ -74,13 +74,19 @@ async def broadcast_room_all(room: str, message: dict):
         await asyncio.gather(*[ws.send(data) for ws in targets], return_exceptions=True)
 
 async def broadcast_online(room: str):
-    """Broadcast online count and user list to everyone in a room."""
+    """Broadcast online count and user list with public keys to everyone in a room."""
     user_list = users_in_room(room)
     count = len(user_list)
+    public_keys = {}
+    for c in clients.values():
+        if c["room"] == room and c["username"] in user_list and "public_key" in c:
+            public_keys[c["username"]] = c["public_key"]
+            
     await broadcast_room_all(room, {
         "type": "online",
         "count": count,
-        "users": user_list
+        "users": user_list,
+        "public_keys": public_keys
     })
 
 async def handle_command(websocket, text: str):
@@ -480,8 +486,9 @@ async def handler(websocket):
     except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed):
         return
 
-    clients[websocket] = {"username": username, "room": "global"}
-    print(f"[{timestamp()}] + {username} joined")
+    public_key = data.get("public_key", "")
+    clients[websocket] = {"username": username, "room": "global", "public_key": public_key}
+    print(f"[{timestamp()}] + {username} joined (Public Key: {'Yes' if public_key else 'No'})")
 
     name_info = "" if username == (sanitize_username(data.get("username", "")) or username) else f" (username sudah dipakai, diganti menjadi {username})"
     await send(websocket, {

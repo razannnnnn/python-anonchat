@@ -1,7 +1,7 @@
 import json
 from textual.widgets import RichLog
 from textual.css.query import NoMatches
-from .crypto import crypt_msg
+from crypto import crypt_msg, encrypt_rsa
 
 async def process_user_command(app, cmd: str, parts: list, text: str):
     if cmd == "/help":
@@ -65,11 +65,26 @@ async def process_user_command(app, cmd: str, parts: list, text: str):
             else:
                 target_name = w_parts[0]
                 whisper_text = w_parts[1]
+                
+                # Store original text for local rendering
+                original_text = whisper_text
+                
+                # Encrypt if we have their public key
+                target_pub = app.public_keys.get(target_name)
+                if target_pub:
+                    whisper_text = encrypt_rsa(target_pub, whisper_text)
+                else:
+                    app.append_system(f"⚠ [Peringatan] Public Key untuk '{target_name}' tidak ditemukan di memori lokal. Pesan mungkin tidak terenkripsi RSA.")
+
                 await app.ws.send(json.dumps({
                     "type": "whisper",
                     "to": target_name,
                     "text": whisper_text
                 }))
+                
+                # Render locally
+                import datetime
+                app.append_whisper_out(target_name, original_text, datetime.datetime.now().strftime("%H:%M:%S"))
         else:
             app.append_system("Penggunaan: /w <username> <pesan>")
     elif cmd == "/r":
@@ -77,11 +92,27 @@ async def process_user_command(app, cmd: str, parts: list, text: str):
             app.append_system("Belum ada whisper yang bisa dibalas.")
         elif len(parts) > 1:
             whisper_text = parts[1]
+            target_name = app.last_whisper_from
+            
+            # Store original text for local rendering
+            original_text = whisper_text
+            
+            # Encrypt if we have their public key
+            target_pub = app.public_keys.get(target_name)
+            if target_pub:
+                whisper_text = encrypt_rsa(target_pub, whisper_text)
+            else:
+                app.append_system(f"⚠ [Peringatan] Public Key untuk '{target_name}' tidak ditemukan di memori lokal. Pesan mungkin tidak terenkripsi RSA.")
+
             await app.ws.send(json.dumps({
                 "type": "whisper",
-                "to": app.last_whisper_from,
+                "to": target_name,
                 "text": whisper_text
             }))
+            
+            # Render locally
+            import datetime
+            app.append_whisper_out(target_name, original_text, datetime.datetime.now().strftime("%H:%M:%S"))
         else:
             app.append_system("Penggunaan: /r <pesan>")
     elif cmd == "/burn":
