@@ -1,0 +1,10 @@
+# AnonChat Requirements
+
+# Shared / Server Dependencies
+websockets>=11.0.3
+
+# Client UI Dependencies
+textual>=0.40.0
+
+# Client Crypto Dependencies
+cryptography>=41.0.0
